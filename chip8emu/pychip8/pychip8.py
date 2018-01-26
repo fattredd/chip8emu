@@ -3,6 +3,7 @@
 #
 
 import pyglet
+from pyglet.window import key as keyCode
 import random
 import time
 
@@ -11,8 +12,29 @@ windowH = 32 * windowScale
 windowW = 64 * windowScale
 pixQt = windowH*windowW
 
+
+
 class screen(object):
     poly = pyglet.gl.GL_POLYGON
+    chip8_fontset = (
+        0xF0, 0x90, 0x90, 0x90, 0xF0, # 0
+        0x20, 0x60, 0x20, 0x20, 0x70, # 1
+        0xF0, 0x10, 0xF0, 0x80, 0xF0, # 2
+        0xF0, 0x10, 0xF0, 0x10, 0xF0, # 3
+        0x90, 0x90, 0xF0, 0x10, 0x10, # 4
+        0xF0, 0x80, 0xF0, 0x10, 0xF0, # 5
+        0xF0, 0x80, 0xF0, 0x90, 0xF0, # 6
+        0xF0, 0x10, 0x20, 0x40, 0x40, # 7
+        0xF0, 0x90, 0xF0, 0x90, 0xF0, # 8
+        0xF0, 0x90, 0xF0, 0x10, 0xF0, # 9
+        0xF0, 0x90, 0xF0, 0x90, 0x90, # A
+        0xE0, 0x90, 0xE0, 0x90, 0xE0, # B
+        0xF0, 0x80, 0x80, 0x80, 0xF0, # C
+        0xE0, 0x90, 0x90, 0x90, 0xE0, # D
+        0xF0, 0x80, 0xF0, 0x80, 0xF0, # E
+        0xF0, 0x80, 0xF0, 0x80, 0x80  # F
+    )
+
 
     def __init__(self):
         self.window = pyglet.window.Window()
@@ -25,9 +47,7 @@ class screen(object):
             x+1, y,
             x+1, y+1,
             x, y+1
-            ))
-        )
-
+            )))
 
 class Chip8(object):
     def __init__(self):
@@ -42,11 +62,14 @@ class Chip8(object):
         self.Stack = [0]*16     # Program Counter Stack
         self.SP = 0             # Stack Pointer
 
-        self.Keyboard = [0]*16  # Keyboard storage
+        self.Keys = [0]*16       # Keyboard storage
 
         self.display = [[False]*windowH]*windowW
         self.updateDisplay = False
-        # load fontset here
+        self.Screen = screen()
+        
+        for i, byte in enumerate(chip8_fontset):
+            memory[i] = byte
 
     def loadProgram(self,file):
         with open(file, 'rb') as game:
@@ -165,34 +188,64 @@ class Chip8(object):
                 self.V[x] = self.DelayT
                 self.PC += 1
             elif selector == 0x0A:
-                lastKey = Keyboard[:]
+                lastKey = Keys[:]
                 while True:
                     for i, key in enumerate(lastKey):
                         updateKeys()
-                        if Keyboard[i] != key:
-                            V[x] = Keyboard[i]
+                        if Keys[i] != key:
+                            V[x] = Keys[i]
                             break
                 self.PC += 2
-
+            elif selector == 0x15:
+                # 0xFX15 Set DelayT to Vx
+                self.DelayT = V[x]
+                self.PC += 2
+            elif selector == 0x18:
+                # 0xFX18 Set SoundT to Vx
+                self.SoundT = V[x]
+                self.PC += 2
+            elif selector == 0x1E:
+                # 0xFX1E Add Vx to I
+                self.I = self.I + self.V[x]
+                if self.I > 0xFFF:
+                    self.I &= 0xFFF
+                    self.V[0xF] = 1
+                else:
+                    self.V[0xF] = 0
+                self.PC += 2
+            elif selector == 0x29:
+                # 0xFX29 Sets I to the address for charactor in Vx
+                self.I = self.V[x]*5
+                self.PC += 2
+            elif selector == 0x33:
+                # 0xFX33 BCD of Vx stored in I
+                num = self.V[x]
+                self.memory[self.I] = num / 100
+                self.memory[self.I+1] = (num / 10) % 10
+                self.memory[self.I+2] = (num%100) % 10
+                self.PC += 2
+            elif selector == 0x55:
+                # 0xFX55 Store V0-x in memory starting at I
+                for num in range(x):
+                    self.I += num
+                    self.memory[self.I] = self.V[num]
+                self.PC += 2
+            elif selector == 0x65:
+                # 0xFX65 Store memory to V0-x starting at I
+                for num in range(x):
+                    self.I += num
+                    self.V[num] = self.memory[self.I]
+                self.PC += 2
         else:
             # Unhandled Opcode
             print("Cannot parse %s. Opcode not found.".format(str(hex(opCode))))
 
-chip8_fontset = (
-  0xF0, 0x90, 0x90, 0x90, 0xF0, # 0
-  0x20, 0x60, 0x20, 0x20, 0x70, # 1
-  0xF0, 0x10, 0xF0, 0x80, 0xF0, # 2
-  0xF0, 0x10, 0xF0, 0x10, 0xF0, # 3
-  0x90, 0x90, 0xF0, 0x10, 0x10, # 4
-  0xF0, 0x80, 0xF0, 0x10, 0xF0, # 5
-  0xF0, 0x80, 0xF0, 0x90, 0xF0, # 6
-  0xF0, 0x10, 0x20, 0x40, 0x40, # 7
-  0xF0, 0x90, 0xF0, 0x90, 0xF0, # 8
-  0xF0, 0x90, 0xF0, 0x10, 0xF0, # 9
-  0xF0, 0x90, 0xF0, 0x90, 0x90, # A
-  0xE0, 0x90, 0xE0, 0x90, 0xE0, # B
-  0xF0, 0x80, 0x80, 0x80, 0xF0, # C
-  0xE0, 0x90, 0x90, 0x90, 0xE0, # D
-  0xF0, 0x80, 0xF0, 0x80, 0xF0, # E
-  0xF0, 0x80, 0xF0, 0x80, 0x80  # F
-  )
+    def updateKeys(self):
+        keyboard = keyCode.KeyStateHandler()
+        self.screen.window.push_handlers(keyboard)
+        self.Keys = [
+            keyCode._1, keyCode._2, keyCode._4, keyCode._4,
+            keyCode.Q, keyCode.W, keyCode.E, keyCode.R,
+            keyCode.A, keyCode.S, keyCode.D, keyCode.F,
+            keyCode.Z, keyCode.X, keyCode.C, keyCode.V ]
+
