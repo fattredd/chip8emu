@@ -39,15 +39,25 @@ class screen(object):
     def __init__(self):
         self.window = pyglet.window.Window()
         self.window.set_minimum_size(windowW, windowH)
+        pyglet.app.run()
 
     def drawPixel(self, x, y):
         # pixelSize = self.windowScale
-        pyglet.graphics.draw(4, poly, ('2vi',(
+        pix = pyglet.graphics.draw(4, poly, ('2vi',(
             x, y,
             x+1, y,
             x+1, y+1,
             x, y+1
             )))
+        pix.draw()
+
+    def drawFrame(self, display):
+        self.window.clear()
+        for i, pixel in enumerate(display):
+            if pixel:
+                x = i % windowW
+                y = i / windowW
+                drawPixel(x, y)
 
 class Chip8(object):
     def __init__(self):
@@ -249,3 +259,12 @@ class Chip8(object):
             keyCode.A, keyCode.S, keyCode.D, keyCode.F,
             keyCode.Z, keyCode.X, keyCode.C, keyCode.V ]
 
+    def runCycle(self):
+        updateKeys()
+        runOp(self.PC)
+        if updateDisplay:
+            self.screen.drawFrame(self.display)
+
+if __name__ == "__main__":
+    emu = Chip8()
+    emu.loadProgram('pong.ch8')
