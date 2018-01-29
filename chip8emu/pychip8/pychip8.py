@@ -44,7 +44,8 @@ class screen(object):
         #print("Pixel at:",x,y)
         pygame.draw.rect(self.window,
             (0, 255, 255), # Color
-            (x*windowScale, y*windowScale, windowScale, windowScale) # Rect
+            (x*windowScale, y*windowScale,\
+                windowScale, windowScale) # Rect
         )
             
 
@@ -100,36 +101,33 @@ class Chip8(object):
                 self.PC += 2
             elif opCode&0xFFF == 0xEE:
                 # 0x00EE Return
-                self.SP -= 1
                 self.PC = self.Stack[self.SP] + 2
-                if self.SP == -1:
-                    assert False
-                else:
-                    self.Stack[self.SP] = 0
-                self.level -= 1
+                self.Stack[self.SP] = 0
+                self.SP -= 1
             else:
                 # 0x0NNN Call
-                self.Stack[self.SP] = self.PC
                 self.SP += 1
+                self.Stack[self.SP] = self.PC
                 self.PC = opCode & 0x0FFF
-                self.level += 1
+                print("This shouldn't happen")
+                assert False
         elif fo == 0x1000:
             # 0x1NNN goto
-            self.PC = opCode & 0xFFF
+            self.PC = opCode & 0x0FFF
         elif fo == 0x2000:
-            # 0x2NNN call subroutine
-            self.Stack[self.SP] = self.PC
+            # 0x2NNN Call subroutine
             self.SP += 1
+            self.Stack[self.SP] = self.PC
             self.PC = opCode & 0x0FFF
         elif fo == 0x3000:
             # 0x3XNN Skip next if Vx == NN
             self.PC += 2
-            if self.V[(opCode&0xF00)>>8] == opCode&0xFF:
+            if self.V[(opCode&0xF00) >> 8] == opCode&0xFF:
                 self.PC += 2
         elif fo == 0x4000:
             # 0x4XNN Skip next if Vx != NN
             self.PC += 2
-            if self.V[(opCode&0xF00)>>8] != opCode&0xFF:
+            if self.V[(opCode&0xF00) >> 8] != opCode&0xFF:
                 self.PC += 2
         elif fo == 0x5000:
             # 0x5XY0 Skip next if Vx == Vy
@@ -141,7 +139,7 @@ class Chip8(object):
             self.V[(opCode&0xF00) >> 8] = opCode&0xFF
             self.PC += 2
         elif fo == 0x7000:
-            # 0x7XNNN Add NN to Vx (no carry flag)
+            # 0x7XNN Add NN to Vx (no carry flag)
             self.V[(opCode&0xF00) >> 8] += opCode&0xFF
             self.V[(opCode&0xF00) >> 8] &= 0xFF
             self.PC += 2
@@ -150,8 +148,10 @@ class Chip8(object):
             x = opCode&0xF00 >> 8
             y = opCode&0x0F0 >> 4
             selector = opCode&0x00F
-
-            if selector == 0x1:
+            if selector == 0x0:
+                # 0x8XY0 Set Vx to Vy
+                self.V[x] = self.V[y]
+            elif selector == 0x1:
                 # 0x8YX1 Set Vx to Vx|Vy
                 self.V[x] |= self.V[y]
             elif selector == 0x2:
@@ -198,7 +198,8 @@ class Chip8(object):
             self.PC = self.V[0] + opCode&0xFFF
         elif fo == 0xC000:
             # 0xCXNN Set Vx to (Rand&NN)
-            self.V[(opCode&0xF00) >> 8] = random.randint(0x00,0xFF) & (opCode&0xFF)
+            self.V[(opCode&0xF00) >> 8] = random.randint(0x00,0xFF)\
+                & (opCode&0xFF)
             self.PC += 2
         elif fo == 0xD000:
             # 0xDXYN Draw sprite at (Vx,Vy) width of 8px height of N
@@ -209,7 +210,8 @@ class Chip8(object):
 
             self.V[0xF] = 0 # Collision flag
             for line in range(h):
-                byte = [int(i) for i in bin(self.memory[self.I + line*8])[2:].rjust(8,'0')]
+                byte = [int(i) for i in bin(self.memory[self.I\
+                    + line*8])[2:].rjust(8,'0')]
                 for i, new in enumerate(byte): # Width of 8px
                     old = self.display[x + y + i]
                     self.display[x + y + i] = new^old # Set bit
@@ -270,9 +272,11 @@ class Chip8(object):
             elif selector == 0x33:
                 # 0xFX33 BCD of Vx stored in I
                 num = self.V[x]
+                #print(num)
                 self.memory[self.I] = int(num / 100)
                 self.memory[self.I+1] = int((num / 10) % 10)
                 self.memory[self.I+2] = (num%100) % 10
+                #print(int(num/100), int((num/10)%10),int((num%100)%10))
                 self.PC += 2
             elif selector == 0x55:
                 # 0xFX55 Store V0-x in self.memory starting at I
@@ -292,16 +296,21 @@ class Chip8(object):
                 assert False
         else:
             # Unhandled Opcode
-            print("Cannot parse %s. Opcode not found.".format(str(hex(opCode))))
+            print("Cannot parse %s. Opcode not found."\
+                .format(str(hex(opCode))))
             assert False
 
     def updateKeys(self):
         cKey = pygame.key.get_pressed()
         self.Keys = [
-            cKey[pygame.K_1], cKey[pygame.K_2], cKey[pygame.K_4], cKey[pygame.K_4],
-            cKey[pygame.K_q], cKey[pygame.K_w], cKey[pygame.K_e], cKey[pygame.K_r],
-            cKey[pygame.K_a], cKey[pygame.K_s], cKey[pygame.K_d], cKey[pygame.K_f],
-            cKey[pygame.K_z], cKey[pygame.K_x], cKey[pygame.K_c], cKey[pygame.K_v]]
+            cKey[pygame.K_1], cKey[pygame.K_2], 
+            cKey[pygame.K_4], cKey[pygame.K_4],
+            cKey[pygame.K_q], cKey[pygame.K_w],
+            cKey[pygame.K_e], cKey[pygame.K_r],
+            cKey[pygame.K_a], cKey[pygame.K_s],
+            cKey[pygame.K_d], cKey[pygame.K_f],
+            cKey[pygame.K_z], cKey[pygame.K_x],
+            cKey[pygame.K_c], cKey[pygame.K_v]]
 
     def runCycle(self):
         self.updateKeys()
@@ -311,7 +320,7 @@ class Chip8(object):
 
 if __name__ == "__main__":
     emu = Chip8()
-    emu.loadProgram('pong.ch8')
+    emu.loadProgram('pong2.c8')
     #code.interact(local=locals())
     while True:
         emu.runCycle()
