@@ -137,7 +137,42 @@ class Chip8(object):
             self.PC += 2
         elif fo == 0x8000:
             # 0x8000 2-Var math
-            print("Math found. No.")
+            x = opCode&0xF00 >> 8
+            y = opCode&0x0F0 >> 4
+            selector = opCode&0x00F
+
+            if selector == 0x1:
+                # 0x8YX1 Set Vx to Vx|Vy
+                self.V[x] |= self.V[y]
+            elif selector == 0x2:
+                # 0x8YX2 Set Vx to Vx&Vy
+                self.V[x] &= self.V[y]
+            elif selector == 0x3:
+                # 0x8YX3 Set Vx to Vx^Vy
+                self.V[x] ^= self.V[y]
+            elif selector == 0x4:
+                # 0x8YX4 Set Vx to Vx+Vy
+                self.V[x] += self.V[y]
+            elif selector == 0x5:
+                # 0x8YX5 Set Vx to Vx-Vy
+                self.V[x] -= self.V[y]
+            elif selector == 0x6:
+                # 0x8YX6 Set Vx and Vy to Vy >> 1
+                self.V[x] = self.V[y] >> 1
+                self.V[y] = self.V[x]
+            elif selector == 0x7:
+                # 0x8YX7 Set Vx to Vy-Vx
+                self.V[x] = self.V[y] - V[x]
+                if self.V[x]&0xF0 > self.V[y]&0xF0:
+                   self.V[0xF] = 1
+                elif self.V[x]&0xF > self.V[y]&0xF:
+                   self.V[0xF] = 1
+                else:
+                    self.V[0xF] = 0
+            elif selector == 0xE:
+                # 0x8XYE Set Vx and Vy to Vy << 1
+                self.V[x] = self.V[y] << 1
+                self.V[y] = self.V[x]
         elif fo == 0x9000:
             # 0x9XY0 Skip next if Vx != Vy
             self.PC += 2
