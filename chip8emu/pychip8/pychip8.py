@@ -6,8 +6,9 @@ import pyglet
 from pyglet.window import key as keyCode
 import random
 import time
+import code
 
-windowScale = 1
+windowScale = 3
 windowH = 32 * windowScale
 windowW = 64 * windowScale
 pixQt = windowH*windowW
@@ -32,11 +33,10 @@ chip8_fontset = (
 
 
 class screen(object):
-    poly = pyglet.gl.GL_QUADS
-    
     def __init__(self):
         self.window = pyglet.window.Window()
         self.window.set_minimum_size(windowW, windowH)
+        self.batch = pyglet.graphics.Batch()
 
         @self.window.event 
         def on_draw(): 
@@ -46,22 +46,25 @@ class screen(object):
 
     def drawPixel(self, x, y):
         # pixelSize = self.windowScale
-        pix = pyglet.graphics.draw(4, poly, ('2vi',(
-            x, y,
-            x+1, y,
-            x+1, y+1,
-            x, y+1
-            )))
-        print('Drawing pixel at:',x,y)
-        pix.draw()
+        self.batch.add(4, pyglet.gl.GL_QUADS, None,
+            ('v2i', #rect
+                (x, y, x+windowScale, y,
+                x+windowScale, y+windowScale, x, y+windowScale)
+            ),
+            ('c3B', #color
+                (0, 255, 255, 0, 255, 255,
+                0, 255, 255, 0, 255, 255)
+            )
+            )
 
     def drawFrame(self, display):
         self.window.clear()
         for i, pixel in enumerate(display):
             if pixel:
                 x = i % windowW
-                y = i / windowW
-                drawPixel(x, y)
+                y = int(i / windowW)
+                self.drawPixel(x, y)
+        self.batch.draw()
 
 class Chip8(object):
     def __init__(self):
@@ -78,7 +81,7 @@ class Chip8(object):
 
         self.Keys = [0]*16       # Keyboard storage
 
-        self.display = [[False]*windowH]*windowW
+        self.display = [False]*64*32#[[False]*windowH]*windowW
         self.updateDisplay = False
         self.Screen = screen()
         
@@ -87,14 +90,15 @@ class Chip8(object):
 
     def loadProgram(self,file):
         with open(file, 'rb') as game:
-            for i, byte in enumerate(game):
-                self.memory[i] = byte
+            for i, byte in enumerate(game.read()):
+                self.memory[0x200+i] = byte
         print("Loaded file:", file)
 
     def runOp(self,offset):
         opCode = self.memory[offset] << 8 | self.memory[offset+1]
+        #opCode = int(str(self.memory[offset]) + str(self.memory[offset+1]))
 
-        print("Running Opcode:", hex(opCode))
+        #print("Running Opcode:", hex(opCode))
         fo = opCode & 0xF000
         if fo == 0x0000:
             if opCode&0xFFF == 0xE0:
@@ -177,10 +181,13 @@ class Chip8(object):
             for line in range(h):
                 for i in range(8):
                     old = self.display[x + 64*y + i]
-                    new = self.memory[self.I + line][i]
+                    #old = self.display[x + i][y + line]
+                    new = self.memory[self.I + line + i]
+                    #code.interact(local=locals())
                     self.display[x + 64*y + i] = new^old # Set bit
+                    #self.display[x + i][y + line] = new^old
                     if new and old:
-                        self.V[0xf] = 1 # Collision made
+                        self.V[0xF] = 1 # Collision made
             self.updateDisplay = True
             self.PC += 2
         elif fo == 0xE000:
@@ -188,12 +195,12 @@ class Chip8(object):
             if opCode&0xFF == 0x9E:
                 # 0xEX9E Skip next if key in Vx is pressed
                 self.PC += 2
-                if Keyboard[V[opCode&0xF00 >> 8]]:
+                if self.Keys[self.V[opCode&0xF00 >> 8]]:
                     self.PC += 2
             else:
                 # 0xEXA1 Skip next if key in Vx is not pressed
                 self.PC += 2
-                if not Keyboard[V[opCode&0xF00 >> 8]]:
+                if not self.Keys[self.V[opCode&0xF00 >> 8]]:
                     self.PC += 2
         elif fo == 0xF000:
             # 0xF000 Misc Functions
@@ -204,12 +211,12 @@ class Chip8(object):
                 self.V[x] = self.DelayT
                 self.PC += 1
             elif selector == 0x0A:
-                lastKey = Keys[:]
+                lastKey = self.Keys[:]
                 while True:
                     for i, key in enumerate(lastKey):
                         self.updateKeys()
                         if Keys[i] != key:
-                            V[x] = Keys[i]
+                            self.V[x] = self.Keys[i]
                             break
                 self.PC += 2
             elif selector == 0x15:
@@ -270,10 +277,13 @@ class Chip8(object):
         self.runOp(self.PC)
         if self.updateDisplay:
             self.Screen.drawFrame(self.display)
+            print("drawing Frame")
 
 if __name__ == "__main__":
     emu = Chip8()
     emu.loadProgram('pong.ch8')
+    #code.interact(local=locals())
     while True:
         emu.runCycle()
+        #time.sleep(1.0/60)
 
