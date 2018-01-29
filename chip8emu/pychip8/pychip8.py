@@ -11,34 +11,37 @@ windowScale = 1
 windowH = 32 * windowScale
 windowW = 64 * windowScale
 pixQt = windowH*windowW
-
+chip8_fontset = (
+    0xF0, 0x90, 0x90, 0x90, 0xF0, # 0
+    0x20, 0x60, 0x20, 0x20, 0x70, # 1
+    0xF0, 0x10, 0xF0, 0x80, 0xF0, # 2
+    0xF0, 0x10, 0xF0, 0x10, 0xF0, # 3
+    0x90, 0x90, 0xF0, 0x10, 0x10, # 4
+    0xF0, 0x80, 0xF0, 0x10, 0xF0, # 5
+    0xF0, 0x80, 0xF0, 0x90, 0xF0, # 6
+    0xF0, 0x10, 0x20, 0x40, 0x40, # 7
+    0xF0, 0x90, 0xF0, 0x90, 0xF0, # 8
+    0xF0, 0x90, 0xF0, 0x10, 0xF0, # 9
+    0xF0, 0x90, 0xF0, 0x90, 0x90, # A
+    0xE0, 0x90, 0xE0, 0x90, 0xE0, # B
+    0xF0, 0x80, 0x80, 0x80, 0xF0, # C
+    0xE0, 0x90, 0x90, 0x90, 0xE0, # D
+    0xF0, 0x80, 0xF0, 0x80, 0xF0, # E
+    0xF0, 0x80, 0xF0, 0x80, 0x80  # F
+)
 
 
 class screen(object):
-    poly = pyglet.gl.GL_POLYGON
-    chip8_fontset = (
-        0xF0, 0x90, 0x90, 0x90, 0xF0, # 0
-        0x20, 0x60, 0x20, 0x20, 0x70, # 1
-        0xF0, 0x10, 0xF0, 0x80, 0xF0, # 2
-        0xF0, 0x10, 0xF0, 0x10, 0xF0, # 3
-        0x90, 0x90, 0xF0, 0x10, 0x10, # 4
-        0xF0, 0x80, 0xF0, 0x10, 0xF0, # 5
-        0xF0, 0x80, 0xF0, 0x90, 0xF0, # 6
-        0xF0, 0x10, 0x20, 0x40, 0x40, # 7
-        0xF0, 0x90, 0xF0, 0x90, 0xF0, # 8
-        0xF0, 0x90, 0xF0, 0x10, 0xF0, # 9
-        0xF0, 0x90, 0xF0, 0x90, 0x90, # A
-        0xE0, 0x90, 0xE0, 0x90, 0xE0, # B
-        0xF0, 0x80, 0x80, 0x80, 0xF0, # C
-        0xE0, 0x90, 0x90, 0x90, 0xE0, # D
-        0xF0, 0x80, 0xF0, 0x80, 0xF0, # E
-        0xF0, 0x80, 0xF0, 0x80, 0x80  # F
-    )
-
-
+    poly = pyglet.gl.GL_QUADS
+    
     def __init__(self):
         self.window = pyglet.window.Window()
         self.window.set_minimum_size(windowW, windowH)
+
+        @self.window.event 
+        def on_draw(): 
+            self.window.clear()
+
         pyglet.app.run()
 
     def drawPixel(self, x, y):
@@ -49,6 +52,7 @@ class screen(object):
             x+1, y+1,
             x, y+1
             )))
+        print('Drawing pixel at:',x,y)
         pix.draw()
 
     def drawFrame(self, display):
@@ -79,17 +83,18 @@ class Chip8(object):
         self.Screen = screen()
         
         for i, byte in enumerate(chip8_fontset):
-            memory[i] = byte
+            self.memory[i] = byte
 
     def loadProgram(self,file):
         with open(file, 'rb') as game:
             for i, byte in enumerate(game):
                 self.memory[i] = byte
-        print("Loaded %s".format(file))
+        print("Loaded file:", file)
 
     def runOp(self,offset):
-        opCode = memory[offset] << 8 | memory[offset+1]
+        opCode = self.memory[offset] << 8 | self.memory[offset+1]
 
+        print("Running Opcode:", hex(opCode))
         fo = opCode & 0xF000
         if fo == 0x0000:
             if opCode&0xFFF == 0xE0:
@@ -101,7 +106,7 @@ class Chip8(object):
                 # 0x00EE Return
                 self.PC = self.Stack[self.SP] + 2
                 if self.SP == 0:
-                    exception("Cannot return from subroutine.")
+                    raise exception("Cannot return from subroutine.")
                 else:
                     self.Stack[self.SP] = self.Stack[self.SP-1]
                 self.SP -= 1
@@ -144,7 +149,8 @@ class Chip8(object):
             self.PC += 2
         elif fo == 0x8000:
             # 0x8000 2-Var math
-            pass
+            print("Math found. No.")
+            raise genericException()
         elif fo == 0x9000:
             # 0x9XY0 Skip next if Vx != Vy
             self.PC += 2
@@ -201,7 +207,7 @@ class Chip8(object):
                 lastKey = Keys[:]
                 while True:
                     for i, key in enumerate(lastKey):
-                        updateKeys()
+                        self.updateKeys()
                         if Keys[i] != key:
                             V[x] = Keys[i]
                             break
@@ -235,13 +241,13 @@ class Chip8(object):
                 self.memory[self.I+2] = (num%100) % 10
                 self.PC += 2
             elif selector == 0x55:
-                # 0xFX55 Store V0-x in memory starting at I
+                # 0xFX55 Store V0-x in self.memory starting at I
                 for num in range(x):
                     self.I += num
                     self.memory[self.I] = self.V[num]
                 self.PC += 2
             elif selector == 0x65:
-                # 0xFX65 Store memory to V0-x starting at I
+                # 0xFX65 Store self.memory to V0-x starting at I
                 for num in range(x):
                     self.I += num
                     self.V[num] = self.memory[self.I]
@@ -252,7 +258,7 @@ class Chip8(object):
 
     def updateKeys(self):
         keyboard = keyCode.KeyStateHandler()
-        self.screen.window.push_handlers(keyboard)
+        self.Screen.window.push_handlers(keyboard)
         self.Keys = [
             keyCode._1, keyCode._2, keyCode._4, keyCode._4,
             keyCode.Q, keyCode.W, keyCode.E, keyCode.R,
@@ -260,11 +266,14 @@ class Chip8(object):
             keyCode.Z, keyCode.X, keyCode.C, keyCode.V ]
 
     def runCycle(self):
-        updateKeys()
-        runOp(self.PC)
-        if updateDisplay:
-            self.screen.drawFrame(self.display)
+        self.updateKeys()
+        self.runOp(self.PC)
+        if self.updateDisplay:
+            self.Screen.drawFrame(self.display)
 
 if __name__ == "__main__":
     emu = Chip8()
     emu.loadProgram('pong.ch8')
+    while True:
+        emu.runCycle()
+
