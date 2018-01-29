@@ -2,13 +2,12 @@
 # Chip8
 #
 
-import pyglet
-from pyglet.window import key as keyCode
+import pygame
 import random
 import time
 import code
 
-windowScale = 3
+windowScale = 10
 windowH = 32 * windowScale
 windowW = 64 * windowScale
 pixQt = windowH*windowW
@@ -34,37 +33,24 @@ chip8_fontset = (
 
 class screen(object):
     def __init__(self):
-        self.window = pyglet.window.Window()
-        self.window.set_minimum_size(windowW, windowH)
-        self.batch = pyglet.graphics.Batch()
-
-        @self.window.event 
-        def on_draw(): 
-            self.window.clear()
-
-        pyglet.app.run()
+        pygame.init()
+        self.window = pygame.display.set_mode([windowW,windowH])
 
     def drawPixel(self, x, y):
         # pixelSize = self.windowScale
-        self.batch.add(4, pyglet.gl.GL_QUADS, None,
-            ('v2i', #rect
-                (x, y, x+windowScale, y,
-                x+windowScale, y+windowScale, x, y+windowScale)
-            ),
-            ('c3B', #color
-                (0, 255, 255, 0, 255, 255,
-                0, 255, 255, 0, 255, 255)
-            )
-            )
+        pygame.draw.rect(self.window,
+            (0, 255, 255), # Color
+            (x, y, windowScale, windowScale) # Rect
+        )
+            
 
     def drawFrame(self, display):
-        self.window.clear()
         for i, pixel in enumerate(display):
             if pixel:
                 x = i % windowW
                 y = int(i / windowW)
                 self.drawPixel(x, y)
-        self.batch.draw()
+        pygame.display.flip()
 
 class Chip8(object):
     def __init__(self):
@@ -96,9 +82,7 @@ class Chip8(object):
 
     def runOp(self,offset):
         opCode = self.memory[offset] << 8 | self.memory[offset+1]
-        #opCode = int(str(self.memory[offset]) + str(self.memory[offset+1]))
 
-        #print("Running Opcode:", hex(opCode))
         fo = opCode & 0xF000
         if fo == 0x0000:
             if opCode&0xFFF == 0xE0:
@@ -110,7 +94,7 @@ class Chip8(object):
                 # 0x00EE Return
                 self.PC = self.Stack[self.SP] + 2
                 if self.SP == 0:
-                    raise exception("Cannot return from subroutine.")
+                    assert False
                 else:
                     self.Stack[self.SP] = self.Stack[self.SP-1]
                 self.SP -= 1
@@ -154,7 +138,6 @@ class Chip8(object):
         elif fo == 0x8000:
             # 0x8000 2-Var math
             print("Math found. No.")
-            raise genericException()
         elif fo == 0x9000:
             # 0x9XY0 Skip next if Vx != Vy
             self.PC += 2
@@ -259,31 +242,32 @@ class Chip8(object):
                     self.I += num
                     self.V[num] = self.memory[self.I]
                 self.PC += 2
+            else:
+                print(hex(opCode),"not found.")
+                assert False
         else:
             # Unhandled Opcode
             print("Cannot parse %s. Opcode not found.".format(str(hex(opCode))))
+            assert False
 
     def updateKeys(self):
-        keyboard = keyCode.KeyStateHandler()
-        self.Screen.window.push_handlers(keyboard)
+        cKey = pygame.key.get_pressed()
         self.Keys = [
-            keyCode._1, keyCode._2, keyCode._4, keyCode._4,
-            keyCode.Q, keyCode.W, keyCode.E, keyCode.R,
-            keyCode.A, keyCode.S, keyCode.D, keyCode.F,
-            keyCode.Z, keyCode.X, keyCode.C, keyCode.V ]
+            cKey[pygame.K_1], cKey[pygame.K_2], cKey[pygame.K_4], cKey[pygame.K_4],
+            cKey[pygame.K_q], cKey[pygame.K_w], cKey[pygame.K_e], cKey[pygame.K_r],
+            cKey[pygame.K_a], cKey[pygame.K_s], cKey[pygame.K_d], cKey[pygame.K_f],
+            cKey[pygame.K_z], cKey[pygame.K_x], cKey[pygame.K_c], cKey[pygame.K_v]]
 
     def runCycle(self):
         self.updateKeys()
         self.runOp(self.PC)
         if self.updateDisplay:
             self.Screen.drawFrame(self.display)
-            print("drawing Frame")
 
 if __name__ == "__main__":
     emu = Chip8()
-    emu.loadProgram('pong.ch8')
+    emu.loadProgram('brick.ch8')
     #code.interact(local=locals())
     while True:
         emu.runCycle()
-        #time.sleep(1.0/60)
-
+        time.sleep(1.0/60)
